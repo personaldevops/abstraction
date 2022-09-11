@@ -3,7 +3,7 @@ import os
 
 from pymongo import MongoClient
 
-from SO.enums.directories import Directories, ConfigFiles
+from abstractions.enums.directories import Directories, ConfigFiles
 
 
 class MongoClientLoader(object):

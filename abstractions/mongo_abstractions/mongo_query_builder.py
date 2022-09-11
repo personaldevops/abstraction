@@ -1,8 +1,8 @@
 from typing import List, Optional, Union
 
-from SO.enums.mongo import MongoActions
-from SO.mongo_abstractions.mongo_client_loader import MongoClientLoader
-from SO.mongo_abstractions.operations import MongoFindFilter, MongoSort, MongoUpdateFilter
+from abstractions.enums.mongo import MongoActions
+from abstractions.mongo_abstractions.mongo_client_loader import MongoClientLoader
+from abstractions.mongo_abstractions.operations import MongoFindFilter, MongoSort, MongoUpdateFilter
 
 
 class MongoQueryBuilder:

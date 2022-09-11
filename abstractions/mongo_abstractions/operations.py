@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Union, List
 
-from SO.enums.mongo import MongoPredicates, MongoSortOrder, MongoColumnSelection
+from abstractions.enums.mongo import MongoPredicates, MongoSortOrder, MongoColumnSelection
 
 
 class MongoFilter:
