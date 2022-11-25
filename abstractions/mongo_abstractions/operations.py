@@ -1,33 +1,60 @@
 from datetime import datetime
-from typing import Union, List
-
-from abstractions.enums.mongo import MongoPredicates, MongoSortOrder, MongoColumnSelection
+from multipledispatch import dispatch
+from abstractions.enums.mongo import MongoSortOrder, MongoColumnSelection
+from abstractions.exceptions.mongo_exceptions import InvalidQueryCombinations
+from abstractions.type_definitions.mongo import *
+from abstractions.type_definitions.mongo_query_attributes import DateTimeQuery, ObjectIdQuery, StringQuery, BooleanQuery
+from typing import Union
 
 
 class MongoFilter:
-    def __init__(self, attribute, predicate: MongoPredicates, value: Union[List, str, bool, datetime]):
-        self.attribute = attribute
-        self.predicate = predicate
-        self.value = value
-        self.filter = self.parse_filter()
+    def __init__(self, query: Union[DateTimeQuery, ObjectIdQuery, StringQuery, BooleanQuery]):
+        self.attribute = query.attribute
+        self.predicate = query.predicate
+        self.value = query.value
+        self.filter = self.parse_filter(self.predicate.value)
 
-    def parse_filter(self) -> dict:
-        if self.predicate == MongoPredicates.EqualTo:
-            if type(self.value) not in [float, int, str, datetime]:
-                raise Exception('Mongo equal to operation does not take list or dict as input')
-            return {f'{self.attribute}': self.value}
-        if self.predicate == MongoPredicates.In:
-            if type(self.value) == list:
-                return {f'{self.attribute}': {self.predicate.name: self.value}}
-            raise Exception('Mongo $in operation requires a list but received different input')
-        if self.predicate == MongoPredicates.Gt:
-            if type(self.value) not in [float, int, str, datetime]:
-                raise Exception('Mongo $gt operation does not take list or dict as input')
-            return {f'{self.attribute}': {self.predicate.value: self.value}}
-        if self.predicate == MongoPredicates.Lt:
-            if type(self.value) not in [float, int, str, datetime]:
-                raise Exception('Mongo $lt operation does not take list or dict as input')
-            return {f'{self.attribute}': {self.predicate.value: self.value}}
+    @dispatch(EqualTo)
+    def parse_filter(self, predicate) -> dict:
+        if type(self.value) not in [float, int, str, datetime]:
+            raise InvalidQueryCombinations('Mongo equal to operation does not take list or dict as input')
+        return {f'{self.attribute}': self.value}
+
+    @dispatch(In)
+    def parse_filter(self, predicate) -> dict:
+        if type(self.value) == list:
+            return {f'{self.attribute}': {"$in": self.value}}
+        raise InvalidQueryCombinations('Mongo $in operation requires a list but received different input')
+
+    @dispatch(NotIn)
+    def parse_filter(self, predicate) -> dict:
+        if type(self.value) == list:
+            return {f'{self.attribute}': {"$nin": self.value}}
+        raise InvalidQueryCombinations('Mongo $in operation requires a list but received different input')
+
+    @dispatch(GreaterThan)
+    def parse_filter(self, predicate) -> dict:
+        if type(self.value) not in [float, int, str, datetime]:
+            raise InvalidQueryCombinations('Mongo $gt operation does not take list or dict as input')
+        return {f'{self.attribute}': {"$gt": self.value}}
+
+    @dispatch(GreaterThanOrEqual)
+    def parse_filter(self, predicate) -> dict:
+        if type(self.value) not in [float, int, str, datetime]:
+            raise InvalidQueryCombinations('Mongo $gte operation does not take list or dict as input')
+        return {f'{self.attribute}': {"$gte": self.value}}
+
+    @dispatch(LessThan)
+    def parse_filter(self, predicate) -> dict:
+        if type(self.value) not in [float, int, str, datetime]:
+            raise InvalidQueryCombinations('Mongo $lt operation does not take list or dict as input')
+        return {f'{self.attribute}': {"$lt": self.value}}
+
+    @dispatch(LessThanOrEqual)
+    def parse_filter(self, predicate) -> dict:
+        if type(self.value) not in [float, int, str, datetime]:
+            raise InvalidQueryCombinations('Mongo $lt operation does not take list or dict as input')
+        return {f'{self.attribute}': {"$lte": self.value}}
 
 
 class MongoColumn:
@@ -46,27 +73,15 @@ class MongoFindFilter:
         self.filters = {}
         self.columns = {}
 
-    def add_filter(self, filter: MongoFilter = None, columns: MongoColumn = None) -> None:
-        if columns is not None and filter is not None:
-            self.filters[list(filter.filter.keys())[0]] = list(filter.filter.values())[0]
-            self.columns[list(columns.columns.keys())[0]] = list(columns.columns.values())[0]
-        elif filter is None and columns is not None:
-            self.columns[list(columns.columns.keys())[0]] = list(columns.columns.values())[0]
-        elif columns is None and filter is not None:
-            self.filters[list(filter.filter.keys())[0]] = list(filter.filter.values())[0]
+    @dispatch(MongoFilter, MongoColumn)
+    def add_filter(self, filter_, columns) -> None:
+        self.filters[list(filter_.filter.keys())[0]] = list(filter_.filter.values())[0]
+        self.columns[list(columns.columns.keys())[0]] = list(columns.columns.values())[0]
 
+    @dispatch(MongoColumn)
+    def add_filter(self, filter_) -> None:
+        self.columns[list(filter_.columns.keys())[0]] = list(filter_.columns.values())[0]
 
-class MongoUpdateFilter:
-    def __init__(self, multi: bool = False):
-        self.existing = {}
-        self.update = {}
-        self.multi = multi
-        self.update_query = None
-
-    def add_filter(self, update: MongoFilter, existing: MongoFilter = None) -> None:
-        if existing is not None:
-            self.existing[list(existing.filter.keys())[0]] = list(existing.filter.values())[0]
-            self.update[list(update.filter.keys())[0]] = list(update.filter.values())[0]
-        else:
-            self.update[list(update.filter.keys())[0]] = list(update.filter.values())[0]
-        self.update_query = {'$set': self.update}
+    @dispatch(MongoFilter)
+    def add_filter(self, filter_) -> None:
+        self.filters[list(filter_.filter.keys())[0]] = list(filter_.filter.values())[0]

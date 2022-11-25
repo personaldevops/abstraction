@@ -1,9 +1,8 @@
 import json
 import os
-
 from pymongo import MongoClient
-
 from abstractions.enums.directories import Directories, ConfigFiles
+from abstractions.exceptions.mongo_exceptions import DatabaseNotInitialized
 
 
 class MongoClientLoader(object):
@@ -12,9 +11,9 @@ class MongoClientLoader(object):
     db_store = {}
 
     def __new__(cls):
-        if not hasattr(cls, 'instance'):
-            cls.instance = super(MongoClientLoader, cls).__new__(cls)
-        return cls.instance
+        if not hasattr(cls, '__instance'):
+            cls.__instance = super(MongoClientLoader, cls).__new__(cls)
+        return cls.__instance
 
     def __init__(self):
         self._load_config()
@@ -43,7 +42,8 @@ class MongoClientLoader(object):
             if db['username'] is not None and db['password'] is not None:
                 username = db['username']
                 password = db['password']
-                self.client = MongoClient(host=host, port=port, username=username, password=password)
+                self.client = MongoClient(
+                    host=host, port=port, username=username, password=password)
             else:
                 self.client = MongoClient(host=host, port=port)
             m_db = self.client[db['schema']]
@@ -53,4 +53,5 @@ class MongoClientLoader(object):
         client = self.db_store.get(db_name)
         if client is not None:
             return client
-        raise Exception('Not Initialized: Database not initialized in config')
+        raise DatabaseNotInitialized(
+            f'Not Initialized:{db_name} Database not initialized in db_mongo.config')

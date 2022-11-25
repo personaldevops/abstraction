@@ -1,23 +1,47 @@
-from typing import List, Optional, Union
-
+from typing import List, Optional, Self, Union
+from pymongo import MongoClient
 from abstractions.enums.mongo import MongoActions
 from abstractions.mongo_abstractions.mongo_client_loader import MongoClientLoader
-from abstractions.mongo_abstractions.operations import MongoFindFilter, MongoSort, MongoUpdateFilter
+from abstractions.mongo_abstractions.operations import MongoFindFilter, MongoSort
+from abstractions.exceptions.mongo_exceptions import NoDataToInsert
 
 
+# noinspection PyTypeChecker
 class MongoQueryBuilder:
 
     def __init__(self, schema: str, collection: str, action: MongoActions,
-                 filters: Optional[Union[MongoFindFilter, MongoUpdateFilter]] = None,
-                 data: Optional[List] = None, limit: Optional[int] = None, sort: Optional[MongoSort] = None):
-        self.mc: MongoClientLoader = MongoClientLoader().get_db(schema)[collection]
-        self.action = action
+                 filters: MongoFindFilter = MongoFindFilter(), update_multiple: bool = True,
+                 data: Optional[Union[List, dict]] = None, limit: Optional[int] = None,
+                 sort: Optional[MongoSort] = None) -> Self:
+        """
+
+        Args:
+            schema:Database in which query gets executed
+            collection:Collection in which query gets executed
+            action:Action to be carried out
+            filters:Filters to be applied while executing the query
+            update_multiple:Boolean value whether to update single document or multiple documents | Default is True
+            data:Data that needs to be inserted or updated
+            limit:Number of documents to be returned after executing a find query
+            sort:Sort to be applied before returning documents
+        """
+        self.mc: MongoClient = MongoClientLoader().get_db(schema)[
+            collection]
+        self.action: MongoActions = action
         self.data = data
-        self.filters = filters
-        self.limit_val = limit
-        self.sort_val = sort
+        self.filters: MongoFindFilter = filters
+        self.limit_val: int = limit
+        self.sort_val: MongoSort = sort
+        self.update_multiple: bool = update_multiple
 
     def insert(self) -> None:
+        """
+        Inserts given data into initialized schema and collection.
+        :raise NoDataToInsert: If data is None after initialization
+        :return: Returns None
+        """
+        if self.data is None:
+            raise NoDataToInsert("Nothing to insert to database.")
         if type(self.data) == dict:
             self.data = [self.data]
         self.mc.insert_many(self.data)
@@ -37,16 +61,20 @@ class MongoQueryBuilder:
             self.mc = self.mc.sort(self.sort_val.column, self.sort_val.order)
 
     def update(self) -> None:
-        if self.filters.multi == True:
-            self.mc.update_many(self.filters.existing, self.filters.update_query)
-        else:
-            self.mc.update_one(self.filters.existing, self.filters.update_query)
+        if self.update_multiple:
+            self.mc.update_many(self.filters.filters,
+                                {"$set": self.data})
 
     def delete(self) -> None:
         self.mc.delete_many(self.filters.filters)
 
-    def execute_query(self) -> List:
-        if self.action == MongoActions.Insert and self.data is not None:
+    def execute_query(self, data: Union[List, dict] = None) -> List:
+        if data:
+            if type(data) == dict:
+                self.data = [data]
+            else:
+                self.data = data
+        if self.action == MongoActions.Insert:
             self.insert()
         elif self.action == MongoActions.Find:
             self.find()
